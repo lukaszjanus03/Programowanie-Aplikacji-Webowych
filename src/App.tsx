@@ -100,9 +100,12 @@ export default function App() {
               <div style={styles.avatar}>
                 {user.firstName[0]}{user.lastName[0]}
               </div>
-              <span style={styles.userName}>
-                {user.firstName} {user.lastName}
-              </span>
+              <div>
+                <span style={styles.userName}>
+                  {user.firstName} {user.lastName}
+                </span>
+                <div style={styles.rolePill}>{user.role}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -234,7 +237,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex", alignItems: "center", justifyContent: "center",
     fontSize: 12, fontWeight: 700, color: "#fff",
   },
-  userName: { fontSize: 14, fontWeight: 600, color: "#e2e8f0" },
+  userName: { fontSize: 14, fontWeight: 600, color: "#e2e8f0", display: "block" },
+  rolePill: {
+    fontSize: 10, fontWeight: 700, color: "#a855f7", textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
+  },
   addBtn: {
     background: "linear-gradient(135deg, #6366f1, #8b5cf6)", border: "none",
     color: "#fff", padding: "10px 20px", borderRadius: 10, fontWeight: 600,

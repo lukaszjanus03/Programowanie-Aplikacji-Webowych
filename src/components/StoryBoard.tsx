@@ -4,6 +4,7 @@ import { storyApi } from "../api/storyApi";
 import { userManager } from "../api/userManager";
 import StoryForm from "./StoryForm";
 import DeleteConfirm from "./DeleteConfirm";
+import KanbanBoard from "./KanbanBoard";
 
 interface StoryBoardProps {
   projectId: string;
@@ -30,6 +31,7 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<StoryStatus | "all">("all");
   const [toast, setToast] = useState<string | null>(null);
+  const [kanbanStoryId, setKanbanStoryId] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setStories(storyApi.getByProject(projectId));
@@ -69,19 +71,24 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
     }
   };
 
-  const filtered = filterStatus === "all"
-    ? stories
-    : stories.filter((s) => s.status === filterStatus);
-
+  const filtered = filterStatus === "all" ? stories : stories.filter((s) => s.status === filterStatus);
   const grouped: Record<StoryStatus, Story[]> = { todo: [], doing: [], done: [] };
   filtered.forEach((s) => grouped[s.status].push(s));
 
+  // Show Kanban for chosen story
+  if (kanbanStoryId) {
+    return (
+      <KanbanBoard
+        storyId={kanbanStoryId}
+        onBack={() => { setKanbanStoryId(null); reload(); }}
+      />
+    );
+  }
+
   return (
     <div>
-      {/* Toast */}
       {toast && <div style={styles.toast}>{toast}</div>}
 
-      {/* Top bar */}
       <div style={styles.topBar}>
         <div style={styles.topLeft}>
           <button style={styles.backBtn} onClick={onBack}>← Projekty</button>
@@ -93,15 +100,11 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
         </button>
       </div>
 
-      {/* Filter */}
       <div style={styles.filterRow}>
         {(["all", "todo", "doing", "done"] as const).map((val) => (
           <button
             key={val}
-            style={{
-              ...styles.filterBtn,
-              ...(filterStatus === val ? styles.filterActive : {}),
-            }}
+            style={{ ...styles.filterBtn, ...(filterStatus === val ? styles.filterActive : {}) }}
             onClick={() => setFilterStatus(val)}
           >
             {val === "all" ? "Wszystkie" : STATUS_CONFIG[val].label}
@@ -112,7 +115,6 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
         ))}
       </div>
 
-      {/* Columns */}
       {filterStatus === "all" ? (
         <div style={styles.columns}>
           {(["todo", "doing", "done"] as const).map((status) => (
@@ -125,7 +127,13 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
                 <p style={styles.emptyCol}>Brak historyjek</p>
               ) : (
                 grouped[status].map((s) => (
-                  <StoryCard key={s.id} story={s} onEdit={openEdit} onDelete={setDeleteId} />
+                  <StoryCard
+                    key={s.id}
+                    story={s}
+                    onEdit={openEdit}
+                    onDelete={setDeleteId}
+                    onKanban={setKanbanStoryId}
+                  />
                 ))
               )}
             </div>
@@ -137,26 +145,31 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
             <p style={styles.emptyCol}>Brak historyjek w tej kategorii</p>
           ) : (
             filtered.map((s) => (
-              <StoryCard key={s.id} story={s} onEdit={openEdit} onDelete={setDeleteId} />
+              <StoryCard
+                key={s.id}
+                story={s}
+                onEdit={openEdit}
+                onDelete={setDeleteId}
+                onKanban={setKanbanStoryId}
+              />
             ))
           )}
         </div>
       )}
 
-      {/* Modals */}
       {formOpen && <StoryForm story={editingStory} onSubmit={handleSubmit} onCancel={closeForm} />}
       {deleteId && <DeleteConfirm onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />}
     </div>
   );
 }
 
-// ─── Story Card sub-component ───
 function StoryCard({
-  story, onEdit, onDelete,
+  story, onEdit, onDelete, onKanban,
 }: {
   story: Story;
   onEdit: (s: Story) => void;
   onDelete: (id: string) => void;
+  onKanban: (id: string) => void;
 }) {
   const prio = PRIORITY_LABELS[story.priority];
   return (
@@ -172,6 +185,9 @@ function StoryCard({
       <h4 style={styles.cardTitle}>{story.name}</h4>
       {story.description && <p style={styles.cardDesc}>{story.description}</p>}
       <div style={styles.cardActions}>
+        <button style={styles.kanbanBtn} onClick={() => onKanban(story.id)}>
+          📌 Kanban
+        </button>
         <button style={styles.editBtn} onClick={() => onEdit(story)}>✏️</button>
         <button style={styles.delBtn} onClick={() => onDelete(story.id)}>🗑</button>
       </div>
@@ -183,7 +199,7 @@ const styles: Record<string, React.CSSProperties> = {
   toast: {
     position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
     background: "#22c55e", color: "#fff", padding: "10px 24px", borderRadius: 10,
-    fontWeight: 600, fontSize: 14, zIndex: 999, animation: "toastIn .3s ease",
+    fontWeight: 600, fontSize: 14, zIndex: 999,
     boxShadow: "0 8px 30px rgba(34,197,94,.35)",
   },
   topBar: {
@@ -207,38 +223,31 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center",
     gap: 8, boxShadow: "0 4px 20px rgba(99,102,241,.3)", fontFamily: "inherit",
   },
-  filterRow: {
-    display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" as const,
-  },
+  filterRow: { display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" as const },
   filterBtn: {
     background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)",
     color: "#94a3b8", padding: "8px 16px", borderRadius: 8, fontSize: 13,
     cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8,
-    transition: "all .15s",
   },
   filterActive: {
-    background: "rgba(99,102,241,.15)", borderColor: "rgba(99,102,241,.3)",
-    color: "#a5b4fc",
+    background: "rgba(99,102,241,.15)", borderColor: "rgba(99,102,241,.3)", color: "#a5b4fc",
   },
   filterCount: {
     background: "rgba(255,255,255,.1)", padding: "2px 7px", borderRadius: 4,
     fontSize: 11, fontWeight: 700,
   },
-  columns: {
-    display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16,
-  },
+  columns: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 },
   column: {
     background: "rgba(255,255,255,.02)", borderRadius: 14,
     border: "1px solid rgba(255,255,255,.06)", padding: 16, minHeight: 200,
   },
   colHeader: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    paddingBottom: 12, marginBottom: 12,
-    borderBottom: "2px solid", fontSize: 14, fontWeight: 700, color: "#e2e8f0",
+    paddingBottom: 12, marginBottom: 12, borderBottom: "2px solid",
+    fontSize: 14, fontWeight: 700, color: "#e2e8f0",
   },
   colCount: {
-    background: "rgba(255,255,255,.1)", padding: "2px 8px", borderRadius: 4,
-    fontSize: 12,
+    background: "rgba(255,255,255,.1)", padding: "2px 8px", borderRadius: 4, fontSize: 12,
   },
   singleList: { display: "flex", flexDirection: "column" as const, gap: 12 },
   emptyCol: { color: "#475569", fontSize: 13, textAlign: "center" as const, padding: 20 },
@@ -252,13 +261,17 @@ const styles: Record<string, React.CSSProperties> = {
   },
   prioBadge: {
     fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const,
-    letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 4,
-    border: "1px solid",
+    letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 4, border: "1px solid",
   },
   cardDate: { fontSize: 11, color: "#475569", fontFamily: "'Space Mono', monospace" },
   cardTitle: { margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#e2e8f0" },
   cardDesc: { margin: "0 0 10px", fontSize: 13, color: "#94a3b8", lineHeight: 1.5 },
   cardActions: { display: "flex", gap: 6 },
+  kanbanBtn: {
+    background: "rgba(59,130,246,.12)", border: "1px solid rgba(59,130,246,.25)",
+    color: "#60a5fa", padding: "5px 12px", borderRadius: 6, fontSize: 12,
+    cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
+  },
   editBtn: {
     background: "rgba(99,102,241,.12)", border: "1px solid rgba(99,102,241,.2)",
     color: "#a5b4fc", padding: "5px 10px", borderRadius: 6, fontSize: 12,
