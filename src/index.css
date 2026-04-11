@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply font-sans;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 bg-gradient-to-br from-indigo-500 to-violet-600
+           text-white font-semibold px-5 py-2.5 rounded-xl text-sm cursor-pointer border-0
+           shadow-lg shadow-indigo-500/30 transition-opacity hover:opacity-90;
+  }
+
+  .btn-ghost {
+    @apply bg-black/5 border border-black/10 text-slate-600 px-4 py-2 rounded-lg
+           text-sm cursor-pointer transition-colors hover:bg-black/10;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/60 backdrop-blur-md flex items-center
+           justify-center z-50 p-5;
+  }
+
+  .form-input {
+    @apply w-full rounded-xl px-4 py-3 text-sm
+           font-sans outline-none transition-colors;
+  }
+
+  .form-label {
+    @apply block text-xs font-semibold mb-1.5 uppercase tracking-widest;
+  }
+}

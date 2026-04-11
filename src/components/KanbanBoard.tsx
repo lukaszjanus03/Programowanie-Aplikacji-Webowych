@@ -4,26 +4,28 @@ import { Story } from "../models/Story";
 import { taskApi } from "../api/taskApi";
 import { storyApi } from "../api/storyApi";
 import { userManager } from "../api/userManager";
+import { notificationService } from "../services/notificationService";
+import { useTheme } from "../ThemeContext";
+import { Priority } from "../models/Story";
 import TaskForm from "./TaskForm";
 import DeleteConfirm from "./DeleteConfirm";
 import TaskDetail from "./TaskDetail";
-import { Priority } from "../models/Story";
 
 interface KanbanBoardProps {
   storyId: string;
   onBack: () => void;
 }
 
-const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; icon: string }> = {
-  todo: { label: "To Do", color: "#f59e0b", icon: "📋" },
-  doing: { label: "W trakcie", color: "#3b82f6", icon: "🔧" },
-  done: { label: "Gotowe", color: "#22c55e", icon: "✅" },
+const STATUS_CONFIG: Record<TaskStatus, { label: string; color: string; textColor: string; border: string }> = {
+  todo:  { label: "To Do",      color: "text-amber-400",   textColor: "#f59e0b", border: "border-amber-400"   },
+  doing: { label: "W trakcie",  color: "text-blue-400",    textColor: "#3b82f6", border: "border-blue-400"    },
+  done:  { label: "Gotowe",     color: "text-emerald-400", textColor: "#22c55e", border: "border-emerald-400" },
 };
 
 const PRIO_MAP = {
-  low: { label: "Niski", color: "#94a3b8" },
-  medium: { label: "Średni", color: "#f59e0b" },
-  high: { label: "Wysoki", color: "#ef4444" },
+  low:    { label: "Niski",  color: "text-slate-400",  border: "border-slate-400" },
+  medium: { label: "Średni", color: "text-amber-400",  border: "border-amber-400" },
+  high:   { label: "Wysoki", color: "text-red-400",    border: "border-red-400"   },
 };
 
 export default function KanbanBoard({ storyId, onBack }: KanbanBoardProps) {
@@ -34,6 +36,8 @@ export default function KanbanBoard({ storyId, onBack }: KanbanBoardProps) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   const reload = useCallback(() => {
     setTasks(taskApi.getByStory(storyId));
@@ -42,7 +46,6 @@ export default function KanbanBoard({ storyId, onBack }: KanbanBoardProps) {
   }, [storyId]);
 
   useEffect(() => { reload(); }, [reload]);
-
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2400);
@@ -53,27 +56,16 @@ export default function KanbanBoard({ storyId, onBack }: KanbanBoardProps) {
   const openEdit = (task: Task) => { setEditingTask(task); setFormOpen(true); };
   const closeForm = () => { setFormOpen(false); setEditingTask(null); };
 
-  const handleSubmit = (data: {
-    name: string; description: string; priority: Priority;
-    estimatedHours: number; storyId: string; status: TaskStatus;
-  }) => {
+  const handleSubmit = (data: { name: string; description: string; priority: Priority; estimatedHours: number; storyId: string; status: TaskStatus }) => {
     if (editingTask) {
-      taskApi.update(editingTask.id, {
-        name: data.name,
-        description: data.description,
-        priority: data.priority,
-        estimatedHours: data.estimatedHours,
-      });
+      taskApi.update(editingTask.id, { name: data.name, description: data.description, priority: data.priority, estimatedHours: data.estimatedHours });
       setToast("Zadanie zaktualizowane ✓");
     } else {
-      taskApi.create({
-        name: data.name,
-        description: data.description,
-        priority: data.priority,
-        estimatedHours: data.estimatedHours,
-        storyId,
-        status: "todo",
-      });
+      taskApi.create({ name: data.name, description: data.description, priority: data.priority, estimatedHours: data.estimatedHours, storyId, status: "todo" });
+      // Notification: new task in story
+      if (story) {
+        notificationService.notifyTaskCreated(data.name, story.name, story.ownerId);
+      }
       setToast("Zadanie utworzone ✓");
     }
     reload();
@@ -82,7 +74,12 @@ export default function KanbanBoard({ storyId, onBack }: KanbanBoardProps) {
 
   const handleDelete = () => {
     if (deleteId) {
+      const taskToDelete = taskApi.getById(deleteId);
       taskApi.delete(deleteId);
+      // Notification: task deleted from story
+      if (taskToDelete && story) {
+        notificationService.notifyTaskDeleted(taskToDelete.name, story.name, story.ownerId);
+      }
       reload();
       setDeleteId(null);
       setToast("Zadanie usunięte");
@@ -93,223 +90,133 @@ export default function KanbanBoard({ storyId, onBack }: KanbanBoardProps) {
   tasks.forEach((t) => grouped[t.status].push(t));
 
   if (detailTaskId) {
-    return (
-      <TaskDetail
-        taskId={detailTaskId}
-        onBack={() => setDetailTaskId(null)}
-        onUpdated={reload}
-      />
-    );
+    return <TaskDetail taskId={detailTaskId} onBack={() => setDetailTaskId(null)} onUpdated={reload} />;
   }
+
+  const columnBase = isDark ? "bg-white/[0.02] border-white/[0.06]" : "bg-slate-50 border-slate-200";
 
   return (
     <div>
-      {toast && <div style={styles.toast}>{toast}</div>}
+      {toast && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-semibold text-sm shadow-xl shadow-emerald-500/30 animate-toast-in">
+          {toast}
+        </div>
+      )}
 
       {/* Top bar */}
-      <div style={styles.topBar}>
-        <div style={styles.topLeft}>
-          <button style={styles.backBtn} onClick={onBack}>← Historyjki</button>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-7">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${isDark ? "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-sm"}`}
+            onClick={onBack}
+          >
+            ← Historyjki
+          </button>
           <div>
-            <h2 style={styles.heading}>Kanban – {story?.name ?? "…"}</h2>
-            <p style={styles.subheading}>Zadania historyjki</p>
+            <h2 className={`text-xl font-bold tracking-tight leading-none ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+              Kanban – {story?.name ?? "…"}
+            </h2>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>Zadania historyjki</p>
           </div>
-          <span style={styles.badge}>{tasks.length} zadań</span>
+          <span className="bg-indigo-500/15 text-indigo-400 px-3 py-1 rounded-md text-xs font-semibold">
+            {tasks.length} zadań
+          </span>
         </div>
-        <button style={styles.addBtn} onClick={openCreate}>
-          <span style={{ fontSize: 18 }}>+</span> Nowe zadanie
+        <button className="btn-primary" onClick={openCreate}>
+          <span className="text-lg leading-none">+</span> Nowe zadanie
         </button>
       </div>
 
-      {/* Kanban columns */}
-      <div style={styles.columns}>
+      {/* Columns */}
+      <div className="grid grid-cols-3 gap-4">
         {(["todo", "doing", "done"] as TaskStatus[]).map((status) => (
-          <div key={status} style={styles.column}>
-            <div style={{ ...styles.colHeader, borderColor: STATUS_CONFIG[status].color }}>
-              <span>
-                {STATUS_CONFIG[status].icon} {STATUS_CONFIG[status].label}
-              </span>
+          <div key={status} className={`rounded-2xl border p-3.5 min-h-[14rem] ${columnBase}`}>
+            <div className={`flex items-center justify-between pb-3 mb-3 border-b-2 text-sm font-bold ${STATUS_CONFIG[status].color} ${STATUS_CONFIG[status].border}`}>
+              <span>📋 {STATUS_CONFIG[status].label}</span>
               <span
-                style={{
-                  ...styles.colCount,
-                  background: STATUS_CONFIG[status].color + "22",
-                  color: STATUS_CONFIG[status].color,
-                }}
+                className="text-xs font-bold px-2 py-0.5 rounded"
+                style={{ background: STATUS_CONFIG[status].textColor + "22", color: STATUS_CONFIG[status].textColor }}
               >
                 {grouped[status].length}
               </span>
             </div>
 
             {grouped[status].length === 0 ? (
-              <p style={styles.emptyCol}>Brak zadań</p>
+              <p className={`text-xs text-center py-5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>Brak zadań</p>
             ) : (
               grouped[status].map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onEdit={openEdit}
-                  onDelete={setDeleteId}
-                  onDetail={setDetailTaskId}
-                />
+                <TaskCard key={task.id} task={task} onEdit={openEdit} onDelete={setDeleteId} onDetail={setDetailTaskId} isDark={isDark} />
               ))
             )}
           </div>
         ))}
       </div>
 
-      {formOpen && (
-        <TaskForm
-          task={editingTask}
-          storyId={storyId}
-          onSubmit={handleSubmit}
-          onCancel={closeForm}
-        />
-      )}
-      {deleteId && (
-        <DeleteConfirm onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
-      )}
+      {formOpen && <TaskForm task={editingTask} storyId={storyId} onSubmit={handleSubmit} onCancel={closeForm} />}
+      {deleteId && <DeleteConfirm onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />}
     </div>
   );
 }
 
-function TaskCard({
-  task, onEdit, onDelete, onDetail,
-}: {
+function TaskCard({ task, onEdit, onDelete, onDetail, isDark }: {
   task: Task;
   onEdit: (t: Task) => void;
   onDelete: (id: string) => void;
   onDetail: (id: string) => void;
+  isDark: boolean;
 }) {
   const prio = PRIO_MAP[task.priority];
   const user = task.assignedUserId ? userManager.getUserById(task.assignedUserId) : undefined;
-
-  const fmt = (iso?: string) =>
-    iso ? new Date(iso).toLocaleDateString("pl-PL") : null;
+  const fmt = (iso?: string) => iso ? new Date(iso).toLocaleDateString("pl-PL") : null;
 
   return (
-    <div style={styles.card}>
-      <div style={styles.cardTop}>
-        <span style={{ ...styles.prioBadge, color: prio.color, borderColor: prio.color }}>
+    <div className={`rounded-xl border p-3.5 mb-2.5 animate-fade-slide-up transition-colors ${isDark ? "bg-white/5 border-white/10 hover:bg-white/[0.08]" : "bg-white border-slate-200 shadow-sm hover:shadow"}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-xs font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${prio.color} ${prio.border}`}>
           {prio.label}
         </span>
-        <span style={styles.cardHours}>{task.estimatedHours}h</span>
+        <span className={`text-xs font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>{task.estimatedHours}h</span>
       </div>
 
-      <h4 style={styles.cardTitle}>{task.name}</h4>
-      {task.description && <p style={styles.cardDesc}>{task.description}</p>}
+      <h4 className={`text-sm font-bold mb-1 ${isDark ? "text-slate-100" : "text-slate-900"}`}>{task.name}</h4>
+      {task.description && (
+        <p className={`text-xs leading-relaxed mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{task.description}</p>
+      )}
 
       {user && (
-        <div style={styles.assigneeRow}>
-          <div style={styles.miniAvatar}>
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="w-5 h-5 rounded bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-[9px] font-bold text-white shrink-0">
             {user.firstName[0]}{user.lastName[0]}
           </div>
-          <span style={styles.assigneeName}>{user.firstName} {user.lastName}</span>
+          <span className="text-xs text-indigo-400">{user.firstName} {user.lastName}</span>
         </div>
       )}
 
-      {task.startedAt && (
-        <div style={styles.dateLine}>🕐 Start: {fmt(task.startedAt)}</div>
-      )}
-      {task.finishedAt && (
-        <div style={styles.dateLine}>🏁 Koniec: {fmt(task.finishedAt)}</div>
-      )}
+      {task.startedAt && <p className={`text-xs mb-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>🕐 Start: {fmt(task.startedAt)}</p>}
+      {task.finishedAt && <p className={`text-xs mb-0.5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>🏁 Koniec: {fmt(task.finishedAt)}</p>}
 
-      <div style={styles.cardActions}>
-        <button style={styles.detailBtn} onClick={() => onDetail(task.id)}>👁 Szczegóły</button>
+      <div className="flex gap-1.5 mt-2.5 flex-wrap">
+        <button
+          className={`px-2.5 py-1 rounded text-xs border transition-colors ${isDark ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20" : "bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100"}`}
+          onClick={() => onDetail(task.id)}
+        >
+          👁 Szczegóły
+        </button>
         {task.status === "todo" && (
-          <button style={styles.editBtn} onClick={() => onEdit(task)}>✏️</button>
+          <button
+            className={`px-2.5 py-1 rounded text-xs border transition-colors ${isDark ? "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10" : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"}`}
+            onClick={() => onEdit(task)}
+          >
+            ✏️
+          </button>
         )}
-        <button style={styles.delBtn} onClick={() => onDelete(task.id)}>🗑</button>
+        <button
+          className={`px-2.5 py-1 rounded text-xs border transition-colors ${isDark ? "bg-red-500/10 border-red-500/15 text-red-300 hover:bg-red-500/15" : "bg-red-50 border-red-200 text-red-500 hover:bg-red-100"}`}
+          onClick={() => onDelete(task.id)}
+        >
+          🗑
+        </button>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  toast: {
-    position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
-    background: "#22c55e", color: "#fff", padding: "10px 24px", borderRadius: 10,
-    fontWeight: 600, fontSize: 14, zIndex: 999,
-    boxShadow: "0 8px 30px rgba(34,197,94,.35)",
-  },
-  topBar: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    flexWrap: "wrap" as const, gap: 12, marginBottom: 28,
-  },
-  topLeft: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" as const },
-  backBtn: {
-    background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)",
-    color: "#94a3b8", padding: "8px 14px", borderRadius: 8, fontSize: 13,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-  heading: { margin: 0, fontSize: 20, fontWeight: 700, color: "#e2e8f0" },
-  subheading: { margin: 0, fontSize: 12, color: "#64748b" },
-  badge: {
-    background: "rgba(99,102,241,.15)", color: "#a5b4fc",
-    padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-  },
-  addBtn: {
-    background: "linear-gradient(135deg, #6366f1, #8b5cf6)", border: "none",
-    color: "#fff", padding: "10px 20px", borderRadius: 10, fontWeight: 600,
-    fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center",
-    gap: 8, boxShadow: "0 4px 20px rgba(99,102,241,.3)", fontFamily: "inherit",
-  },
-  columns: {
-    display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16,
-  },
-  column: {
-    background: "rgba(255,255,255,.02)", borderRadius: 14,
-    border: "1px solid rgba(255,255,255,.06)", padding: 14, minHeight: 220,
-  },
-  colHeader: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    paddingBottom: 12, marginBottom: 12, borderBottom: "2px solid",
-    fontSize: 14, fontWeight: 700, color: "#e2e8f0",
-  },
-  colCount: {
-    padding: "2px 9px", borderRadius: 6, fontSize: 12, fontWeight: 700,
-  },
-  emptyCol: { color: "#475569", fontSize: 13, textAlign: "center" as const, padding: "20px 0" },
-  card: {
-    background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 12, padding: 14, marginBottom: 10,
-    animation: "fadeSlideUp .3s ease both",
-  },
-  cardTop: {
-    display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8,
-  },
-  prioBadge: {
-    fontSize: 10, fontWeight: 700, textTransform: "uppercase" as const,
-    letterSpacing: "0.06em", padding: "3px 7px", borderRadius: 4, border: "1px solid",
-  },
-  cardHours: {
-    fontSize: 11, color: "#64748b", fontFamily: "'Space Mono', monospace",
-  },
-  cardTitle: { margin: "0 0 5px", fontSize: 14, fontWeight: 700, color: "#e2e8f0" },
-  cardDesc: { margin: "0 0 8px", fontSize: 12, color: "#94a3b8", lineHeight: 1.45 },
-  assigneeRow: { display: "flex", alignItems: "center", gap: 7, marginBottom: 6 },
-  miniAvatar: {
-    width: 22, height: 22, borderRadius: 6,
-    background: "linear-gradient(135deg, #6366f1, #a855f7)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 9, fontWeight: 700, color: "#fff", flexShrink: 0,
-  },
-  assigneeName: { fontSize: 11, color: "#a5b4fc" },
-  dateLine: { fontSize: 11, color: "#475569", marginBottom: 3 },
-  cardActions: { display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" as const },
-  detailBtn: {
-    background: "rgba(99,102,241,.12)", border: "1px solid rgba(99,102,241,.2)",
-    color: "#a5b4fc", padding: "5px 10px", borderRadius: 6, fontSize: 11,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-  editBtn: {
-    background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)",
-    color: "#94a3b8", padding: "5px 10px", borderRadius: 6, fontSize: 11,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-  delBtn: {
-    background: "rgba(239,68,68,.08)", border: "1px solid rgba(239,68,68,.15)",
-    color: "#fca5a5", padding: "5px 10px", borderRadius: 6, fontSize: 11,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-};

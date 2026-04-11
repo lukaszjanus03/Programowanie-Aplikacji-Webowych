@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Story, StoryStatus, Priority } from "../models/Story";
 import { storyApi } from "../api/storyApi";
 import { userManager } from "../api/userManager";
+import { useTheme } from "../ThemeContext";
 import StoryForm from "./StoryForm";
 import DeleteConfirm from "./DeleteConfirm";
 import KanbanBoard from "./KanbanBoard";
@@ -12,16 +13,16 @@ interface StoryBoardProps {
   onBack: () => void;
 }
 
-const STATUS_CONFIG: Record<StoryStatus, { label: string; color: string; bg: string }> = {
-  todo: { label: "📋 To Do", color: "#f59e0b", bg: "rgba(245,158,11,.1)" },
-  doing: { label: "🔧 In Progress", color: "#3b82f6", bg: "rgba(59,130,246,.1)" },
-  done: { label: "✅ Done", color: "#22c55e", bg: "rgba(34,197,94,.1)" },
+const STATUS_CONFIG: Record<StoryStatus, { label: string; color: string; border: string }> = {
+  todo:  { label: "📋 To Do",       color: "text-amber-400",  border: "border-amber-400" },
+  doing: { label: "🔧 In Progress", color: "text-blue-400",   border: "border-blue-400"  },
+  done:  { label: "✅ Done",        color: "text-emerald-400", border: "border-emerald-400" },
 };
 
-const PRIORITY_LABELS: Record<Priority, { label: string; color: string }> = {
-  low: { label: "Niski", color: "#94a3b8" },
-  medium: { label: "Średni", color: "#f59e0b" },
-  high: { label: "Wysoki", color: "#ef4444" },
+const PRIORITY_LABELS: Record<Priority, { label: string; color: string; border: string }> = {
+  low:    { label: "Niski",  color: "text-slate-400",  border: "border-slate-400" },
+  medium: { label: "Średni", color: "text-amber-400",  border: "border-amber-400" },
+  high:   { label: "Wysoki", color: "text-red-400",    border: "border-red-400"   },
 };
 
 export default function StoryBoard({ projectId, projectName, onBack }: StoryBoardProps) {
@@ -32,13 +33,11 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
   const [filterStatus, setFilterStatus] = useState<StoryStatus | "all">("all");
   const [toast, setToast] = useState<string | null>(null);
   const [kanbanStoryId, setKanbanStoryId] = useState<string | null>(null);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
-  const reload = useCallback(() => {
-    setStories(storyApi.getByProject(projectId));
-  }, [projectId]);
-
+  const reload = useCallback(() => { setStories(storyApi.getByProject(projectId)); }, [projectId]);
   useEffect(() => { reload(); }, [reload]);
-
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2400);
@@ -63,52 +62,70 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
   };
 
   const handleDelete = () => {
-    if (deleteId) {
-      storyApi.delete(deleteId);
-      reload();
-      setDeleteId(null);
-      setToast("Historyjka usunięta");
-    }
+    if (deleteId) { storyApi.delete(deleteId); reload(); setDeleteId(null); setToast("Historyjka usunięta"); }
   };
 
   const filtered = filterStatus === "all" ? stories : stories.filter((s) => s.status === filterStatus);
   const grouped: Record<StoryStatus, Story[]> = { todo: [], doing: [], done: [] };
   filtered.forEach((s) => grouped[s.status].push(s));
 
-  // Show Kanban for chosen story
   if (kanbanStoryId) {
-    return (
-      <KanbanBoard
-        storyId={kanbanStoryId}
-        onBack={() => { setKanbanStoryId(null); reload(); }}
-      />
-    );
+    return <KanbanBoard storyId={kanbanStoryId} onBack={() => { setKanbanStoryId(null); reload(); }} />;
   }
+
+  const cardBase = isDark
+    ? "bg-white/5 border-white/10 hover:bg-white/[0.08]"
+    : "bg-white border-slate-200 shadow-sm hover:shadow-md";
+
+  const columnBase = isDark
+    ? "bg-white/[0.02] border-white/[0.06]"
+    : "bg-slate-50 border-slate-200";
 
   return (
     <div>
-      {toast && <div style={styles.toast}>{toast}</div>}
-
-      <div style={styles.topBar}>
-        <div style={styles.topLeft}>
-          <button style={styles.backBtn} onClick={onBack}>← Projekty</button>
-          <h2 style={styles.projectTitle}>{projectName}</h2>
-          <span style={styles.badge}>{stories.length} historyjek</span>
+      {toast && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-semibold text-sm shadow-xl shadow-emerald-500/30 animate-toast-in">
+          {toast}
         </div>
-        <button style={styles.addBtn} onClick={openCreate}>
-          <span style={{ fontSize: 18 }}>+</span> Nowa historyjka
+      )}
+
+      {/* Top bar */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${isDark ? "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-sm"}`}
+            onClick={onBack}
+          >
+            ← Projekty
+          </button>
+          <h2 className={`text-xl font-bold tracking-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}>{projectName}</h2>
+          <span className="bg-indigo-500/15 text-indigo-400 px-3 py-1 rounded-md text-xs font-semibold">
+            {stories.length} historyjek
+          </span>
+        </div>
+        <button className="btn-primary" onClick={openCreate}>
+          <span className="text-lg leading-none">+</span> Nowa historyjka
         </button>
       </div>
 
-      <div style={styles.filterRow}>
+      {/* Filter row */}
+      <div className="flex gap-2 mb-6 flex-wrap">
         {(["all", "todo", "doing", "done"] as const).map((val) => (
           <button
             key={val}
-            style={{ ...styles.filterBtn, ...(filterStatus === val ? styles.filterActive : {}) }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm border transition-colors ${
+              filterStatus === val
+                ? isDark
+                  ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-300"
+                  : "bg-indigo-50 border-indigo-200 text-indigo-600"
+                : isDark
+                  ? "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                  : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-sm"
+            }`}
             onClick={() => setFilterStatus(val)}
           >
             {val === "all" ? "Wszystkie" : STATUS_CONFIG[val].label}
-            <span style={styles.filterCount}>
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${isDark ? "bg-white/10" : "bg-black/[0.08]"}`}>
               {val === "all" ? stories.length : stories.filter((s) => s.status === val).length}
             </span>
           </button>
@@ -116,42 +133,32 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
       </div>
 
       {filterStatus === "all" ? (
-        <div style={styles.columns}>
+        <div className="grid grid-cols-3 gap-4">
           {(["todo", "doing", "done"] as const).map((status) => (
-            <div key={status} style={styles.column}>
-              <div style={{ ...styles.colHeader, borderColor: STATUS_CONFIG[status].color }}>
+            <div key={status} className={`rounded-2xl border p-4 min-h-48 ${columnBase}`}>
+              <div className={`flex items-center justify-between pb-3 mb-3 border-b-2 text-sm font-bold ${STATUS_CONFIG[status].color} ${STATUS_CONFIG[status].border}`}>
                 <span>{STATUS_CONFIG[status].label}</span>
-                <span style={styles.colCount}>{grouped[status].length}</span>
+                <span className={`text-xs px-2 py-0.5 rounded font-bold ${isDark ? "bg-white/10 text-slate-300" : "bg-black/[0.08] text-slate-600"}`}>
+                  {grouped[status].length}
+                </span>
               </div>
               {grouped[status].length === 0 ? (
-                <p style={styles.emptyCol}>Brak historyjek</p>
+                <p className={`text-xs text-center py-5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>Brak historyjek</p>
               ) : (
                 grouped[status].map((s) => (
-                  <StoryCard
-                    key={s.id}
-                    story={s}
-                    onEdit={openEdit}
-                    onDelete={setDeleteId}
-                    onKanban={setKanbanStoryId}
-                  />
+                  <StoryCard key={s.id} story={s} onEdit={openEdit} onDelete={setDeleteId} onKanban={setKanbanStoryId} isDark={isDark} cardBase={cardBase} />
                 ))
               )}
             </div>
           ))}
         </div>
       ) : (
-        <div style={styles.singleList}>
+        <div className="flex flex-col gap-3">
           {filtered.length === 0 ? (
-            <p style={styles.emptyCol}>Brak historyjek w tej kategorii</p>
+            <p className={`text-sm text-center py-10 ${isDark ? "text-slate-600" : "text-slate-400"}`}>Brak historyjek w tej kategorii</p>
           ) : (
             filtered.map((s) => (
-              <StoryCard
-                key={s.id}
-                story={s}
-                onEdit={openEdit}
-                onDelete={setDeleteId}
-                onKanban={setKanbanStoryId}
-              />
+              <StoryCard key={s.id} story={s} onEdit={openEdit} onDelete={setDeleteId} onKanban={setKanbanStoryId} isDark={isDark} cardBase={cardBase} />
             ))
           )}
         </div>
@@ -163,123 +170,49 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
   );
 }
 
-function StoryCard({
-  story, onEdit, onDelete, onKanban,
-}: {
+function StoryCard({ story, onEdit, onDelete, onKanban, isDark, cardBase }: {
   story: Story;
   onEdit: (s: Story) => void;
   onDelete: (id: string) => void;
   onKanban: (id: string) => void;
+  isDark: boolean;
+  cardBase: string;
 }) {
   const prio = PRIORITY_LABELS[story.priority];
   return (
-    <div style={styles.card}>
-      <div style={styles.cardTop}>
-        <span style={{ ...styles.prioBadge, color: prio.color, borderColor: prio.color }}>
+    <div className={`rounded-xl border p-4 mb-2.5 animate-fade-slide-up transition-colors ${cardBase}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${prio.color} ${prio.border}`}>
           {prio.label}
         </span>
-        <span style={styles.cardDate}>
+        <span className={`text-xs font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>
           {new Date(story.createdAt).toLocaleDateString("pl-PL")}
         </span>
       </div>
-      <h4 style={styles.cardTitle}>{story.name}</h4>
-      {story.description && <p style={styles.cardDesc}>{story.description}</p>}
-      <div style={styles.cardActions}>
-        <button style={styles.kanbanBtn} onClick={() => onKanban(story.id)}>
+      <h4 className={`text-sm font-bold mb-1.5 ${isDark ? "text-slate-100" : "text-slate-900"}`}>{story.name}</h4>
+      {story.description && (
+        <p className={`text-xs leading-relaxed mb-3 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{story.description}</p>
+      )}
+      <div className="flex gap-1.5">
+        <button
+          className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${isDark ? "bg-blue-500/10 border-blue-500/25 text-blue-300 hover:bg-blue-500/20" : "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"}`}
+          onClick={() => onKanban(story.id)}
+        >
           📌 Kanban
         </button>
-        <button style={styles.editBtn} onClick={() => onEdit(story)}>✏️</button>
-        <button style={styles.delBtn} onClick={() => onDelete(story.id)}>🗑</button>
+        <button
+          className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${isDark ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20" : "bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100"}`}
+          onClick={() => onEdit(story)}
+        >
+          ✏️
+        </button>
+        <button
+          className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${isDark ? "bg-red-500/10 border-red-500/15 text-red-300 hover:bg-red-500/15" : "bg-red-50 border-red-200 text-red-500 hover:bg-red-100"}`}
+          onClick={() => onDelete(story.id)}
+        >
+          🗑
+        </button>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  toast: {
-    position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
-    background: "#22c55e", color: "#fff", padding: "10px 24px", borderRadius: 10,
-    fontWeight: 600, fontSize: 14, zIndex: 999,
-    boxShadow: "0 8px 30px rgba(34,197,94,.35)",
-  },
-  topBar: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    flexWrap: "wrap" as const, gap: 12, marginBottom: 24,
-  },
-  topLeft: { display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" as const },
-  backBtn: {
-    background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)",
-    color: "#94a3b8", padding: "8px 14px", borderRadius: 8, fontSize: 13,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-  projectTitle: { margin: 0, fontSize: 22, fontWeight: 700, color: "#e2e8f0" },
-  badge: {
-    background: "rgba(99,102,241,.15)", color: "#a5b4fc", padding: "4px 10px",
-    borderRadius: 6, fontSize: 12, fontWeight: 600,
-  },
-  addBtn: {
-    background: "linear-gradient(135deg, #6366f1, #8b5cf6)", border: "none",
-    color: "#fff", padding: "10px 20px", borderRadius: 10, fontWeight: 600,
-    fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center",
-    gap: 8, boxShadow: "0 4px 20px rgba(99,102,241,.3)", fontFamily: "inherit",
-  },
-  filterRow: { display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" as const },
-  filterBtn: {
-    background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)",
-    color: "#94a3b8", padding: "8px 16px", borderRadius: 8, fontSize: 13,
-    cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8,
-  },
-  filterActive: {
-    background: "rgba(99,102,241,.15)", borderColor: "rgba(99,102,241,.3)", color: "#a5b4fc",
-  },
-  filterCount: {
-    background: "rgba(255,255,255,.1)", padding: "2px 7px", borderRadius: 4,
-    fontSize: 11, fontWeight: 700,
-  },
-  columns: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 },
-  column: {
-    background: "rgba(255,255,255,.02)", borderRadius: 14,
-    border: "1px solid rgba(255,255,255,.06)", padding: 16, minHeight: 200,
-  },
-  colHeader: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    paddingBottom: 12, marginBottom: 12, borderBottom: "2px solid",
-    fontSize: 14, fontWeight: 700, color: "#e2e8f0",
-  },
-  colCount: {
-    background: "rgba(255,255,255,.1)", padding: "2px 8px", borderRadius: 4, fontSize: 12,
-  },
-  singleList: { display: "flex", flexDirection: "column" as const, gap: 12 },
-  emptyCol: { color: "#475569", fontSize: 13, textAlign: "center" as const, padding: 20 },
-  card: {
-    background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 12, padding: 16, marginBottom: 10,
-    animation: "fadeSlideUp .35s ease both",
-  },
-  cardTop: {
-    display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8,
-  },
-  prioBadge: {
-    fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const,
-    letterSpacing: "0.06em", padding: "3px 8px", borderRadius: 4, border: "1px solid",
-  },
-  cardDate: { fontSize: 11, color: "#475569", fontFamily: "'Space Mono', monospace" },
-  cardTitle: { margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#e2e8f0" },
-  cardDesc: { margin: "0 0 10px", fontSize: 13, color: "#94a3b8", lineHeight: 1.5 },
-  cardActions: { display: "flex", gap: 6 },
-  kanbanBtn: {
-    background: "rgba(59,130,246,.12)", border: "1px solid rgba(59,130,246,.25)",
-    color: "#60a5fa", padding: "5px 12px", borderRadius: 6, fontSize: 12,
-    cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
-  },
-  editBtn: {
-    background: "rgba(99,102,241,.12)", border: "1px solid rgba(99,102,241,.2)",
-    color: "#a5b4fc", padding: "5px 10px", borderRadius: 6, fontSize: 12,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-  delBtn: {
-    background: "rgba(239,68,68,.08)", border: "1px solid rgba(239,68,68,.15)",
-    color: "#fca5a5", padding: "5px 10px", borderRadius: 6, fontSize: 12,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-};

@@ -1,11 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { Project } from "./models/Project";
+import { Notification } from "./models/Notification";
 import { projectApi } from "./api/projectApi";
 import { activeProjectApi } from "./api/activeProjectApi";
+import { notificationApi } from "./api/notificationApi";
 import { userManager } from "./api/userManager";
+import { notificationService } from "./services/notificationService";
+import { useTheme } from "./ThemeContext";
 import ProjectForm from "./components/ProjectForm";
 import DeleteConfirm from "./components/DeleteConfirm";
 import StoryBoard from "./components/StoryBoard";
+import NotificationBadge from "./components/NotificationBadge";
+import NotificationList from "./components/NotificationList";
+import NotificationDetail from "./components/NotificationDetail";
+import NotificationDialog from "./components/NotificationDialog";
+
+type View =
+  | { kind: "projects" }
+  | { kind: "stories" }
+  | { kind: "notifications" }
+  | { kind: "notificationDetail"; id: string };
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -14,16 +28,43 @@ export default function App() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [view, setView] = useState<View>({ kind: "projects" });
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [dialogNotification, setDialogNotification] = useState<Notification | null>(null);
 
+  const { theme, toggleTheme } = useTheme();
   const user = userManager.getLoggedUser();
-
   const reload = useCallback(() => setProjects(projectApi.getAll()), []);
+  const isDark = theme === "dark";
+
+  const refreshNotifications = useCallback(() => {
+    setUnreadCount(notificationApi.getUnreadCount(user.id));
+  }, [user.id]);
 
   useEffect(() => {
     reload();
+    refreshNotifications();
     const saved = activeProjectApi.get();
-    if (saved) setActiveProjectId(saved);
-  }, [reload]);
+    if (saved) {
+      setActiveProjectId(saved);
+      setView({ kind: "stories" });
+    }
+  }, [reload, refreshNotifications]);
+
+  // Subscribe to real-time notification events
+  useEffect(() => {
+    const unsub = notificationService.subscribe((notification) => {
+      refreshNotifications();
+      // Show dialog for medium and high priority notifications for the current user
+      if (
+        notification.recipientId === user.id &&
+        (notification.prority === "medium" || notification.prority === "high")
+      ) {
+        setDialogNotification(notification);
+      }
+    });
+    return unsub;
+  }, [refreshNotifications, user.id]);
 
   useEffect(() => {
     if (!toast) return;
@@ -41,6 +82,7 @@ export default function App() {
       setToast("Projekt zaktualizowany ✓");
     } else {
       projectApi.create({ name, description });
+      notificationService.notifyProjectCreated(name);
       setToast("Projekt utworzony ✓");
     }
     reload();
@@ -55,6 +97,7 @@ export default function App() {
       if (activeProjectId === deleteId) {
         activeProjectApi.clear();
         setActiveProjectId(null);
+        setView({ kind: "projects" });
       }
       reload();
       setDeleteId(null);
@@ -65,241 +108,273 @@ export default function App() {
   const selectProject = (id: string) => {
     activeProjectApi.set(id);
     setActiveProjectId(id);
+    setView({ kind: "stories" });
   };
 
   const goBackToProjects = () => {
     activeProjectApi.clear();
     setActiveProjectId(null);
+    setView({ kind: "projects" });
+  };
+
+  const openNotifications = () => {
+    setView({ kind: "notifications" });
+    setActiveProjectId(null);
+    activeProjectApi.clear();
+  };
+
+  const openNotificationDetail = (id: string) => {
+    setDialogNotification(null);
+    setView({ kind: "notificationDetail", id });
+  };
+
+  const backFromNotificationDetail = () => {
+    setView({ kind: "notifications" });
+  };
+
+  const backFromNotifications = () => {
+    setView({ kind: "projects" });
   };
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
+  const renderMain = () => {
+    if (view.kind === "notificationDetail") {
+      const n = notificationApi.getById(view.id);
+      if (!n) return <p className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>Nie znaleziono powiadomienia.</p>;
+      return (
+        <NotificationDetail
+          notification={n}
+          onBack={backFromNotificationDetail}
+          onRefresh={refreshNotifications}
+        />
+      );
+    }
+
+    if (view.kind === "notifications") {
+      const notifications = notificationApi.getByRecipient(user.id);
+      return (
+        <NotificationList
+          notifications={notifications}
+          onBack={backFromNotifications}
+          onSelect={openNotificationDetail}
+          onRefresh={refreshNotifications}
+          userId={user.id}
+        />
+      );
+    }
+
+    if (view.kind === "stories" && activeProject) {
+      return (
+        <StoryBoard
+          projectId={activeProject.id}
+          projectName={activeProject.name}
+          onBack={goBackToProjects}
+        />
+      );
+    }
+
+    // Default: projects view
+    return (
+      <>
+        {/* Stats */}
+        <div className="flex gap-4 mb-8">
+          <div className={`rounded-2xl px-7 py-5 border flex flex-col gap-1 min-w-[140px] ${
+            isDark ? "bg-white/5 border-white/10" : "bg-white border-slate-200 shadow-sm"
+          }`}>
+            <span className="text-3xl font-bold font-mono bg-gradient-to-br from-indigo-400 to-purple-500 bg-clip-text text-transparent">
+              {projects.length}
+            </span>
+            <span className={`text-xs uppercase tracking-widest font-semibold ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+              Projektów
+            </span>
+          </div>
+        </div>
+
+        {projects.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="text-5xl mb-4">📁</div>
+            <p className={`text-xl font-bold mb-2 ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+              Brak projektów
+            </p>
+            <p className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+              Kliknij „Nowy projekt" aby rozpocząć
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+            {projects.map((p, i) => (
+              <div
+                key={p.id}
+                className={`rounded-2xl p-6 border animate-fade-slide-up transition-colors ${
+                  isDark
+                    ? "bg-white/5 border-white/10 hover:bg-white/[0.08]"
+                    : "bg-white border-slate-200 shadow-sm hover:shadow-md"
+                }`}
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 shrink-0 animate-pulse-glow" />
+                  <h3 className={`text-base font-bold tracking-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                    {p.name}
+                  </h3>
+                </div>
+                <p className={`text-sm mb-3 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  {p.description || "Brak opisu"}
+                </p>
+                <div className={`text-xs font-mono mb-5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
+                  ID: {p.id.slice(0, 8)}…
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button className="btn-primary text-xs px-3.5 py-1.5" onClick={() => selectProject(p.id)}>
+                    🚀 Wybierz
+                  </button>
+                  <button
+                    className={`px-3.5 py-1.5 rounded-lg text-xs border transition-colors ${
+                      isDark
+                        ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-300 hover:bg-indigo-500/20"
+                        : "bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100"
+                    }`}
+                    onClick={() => openEdit(p)}
+                  >
+                    ✏️ Edytuj
+                  </button>
+                  <button
+                    className={`px-3.5 py-1.5 rounded-lg text-xs border transition-colors ${
+                      isDark
+                        ? "bg-red-500/10 border-red-500/20 text-red-300 hover:bg-red-500/15"
+                        : "bg-red-50 border-red-200 text-red-500 hover:bg-red-100"
+                    }`}
+                    onClick={() => handleDeleteRequest(p.id)}
+                  >
+                    🗑 Usuń
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
-    <div style={styles.wrapper}>
+    <div className={`min-h-screen font-sans transition-colors duration-300 ${
+      isDark
+        ? "bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-slate-200"
+        : "bg-gradient-to-br from-slate-100 via-indigo-50 to-slate-100 text-slate-900"
+    }`}>
+
       {/* Toast */}
-      {toast && <div style={styles.toast}>{toast}</div>}
+      {toast && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-semibold text-sm shadow-xl shadow-emerald-500/30 animate-toast-in">
+          {toast}
+        </div>
+      )}
+
+      {/* Notification Dialog (medium/high priority) */}
+      {dialogNotification && (
+        <NotificationDialog
+          notification={dialogNotification}
+          onClose={() => setDialogNotification(null)}
+          onViewDetail={openNotificationDetail}
+        />
+      )}
 
       {/* Header */}
-      <header style={styles.header}>
-        <div style={styles.headerInner}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={styles.logo}>M</div>
+      <header className={`sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-300 ${
+        isDark
+          ? "border-white/5 bg-slate-950/70"
+          : "border-slate-200/60 bg-white/70"
+      }`}>
+        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between flex-wrap gap-3">
+          {/* Logo + title */}
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => { goBackToProjects(); }}>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-mono font-bold text-xl text-white shadow-lg shadow-indigo-500/30">
+              M
+            </div>
             <div>
-              <h1 style={styles.title}>ManageMe</h1>
-              <p style={styles.subtitle}>Zarządzanie projektami</p>
+              <h1 className="text-xl font-bold tracking-tight leading-none">ManageMe</h1>
+              <p className={`text-xs uppercase tracking-widest mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                Zarządzanie projektami
+              </p>
             </div>
           </div>
-          <div style={styles.headerRight}>
-            {!activeProject && (
-              <button style={styles.addBtn} onClick={openCreate}>
-                <span style={{ fontSize: 20, lineHeight: 1 }}>+</span>
+
+          {/* Right side */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {view.kind === "projects" && (
+              <button className="btn-primary" onClick={openCreate}>
+                <span className="text-lg leading-none">+</span>
                 <span>Nowy projekt</span>
               </button>
             )}
-            <div style={styles.userBadge}>
-              <div style={styles.avatar}>
+
+            {/* Notifications link in menu */}
+            <button
+              className={`px-4 py-2 rounded-xl text-sm border transition-colors ${
+                view.kind === "notifications" || view.kind === "notificationDetail"
+                  ? isDark
+                    ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-300"
+                    : "bg-indigo-50 border-indigo-200 text-indigo-600"
+                  : isDark
+                    ? "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                    : "bg-black/5 border-black/10 text-slate-500 hover:bg-black/10"
+              }`}
+              onClick={openNotifications}
+            >
+              📋 Powiadomienia
+            </button>
+
+            {/* Notification bell badge */}
+            <NotificationBadge count={unreadCount} onClick={openNotifications} />
+
+            {/* Dark mode toggle */}
+            <button
+              onClick={toggleTheme}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-colors ${
+                isDark
+                  ? "bg-white/5 border border-white/10 hover:bg-white/10"
+                  : "bg-black/5 border border-black/10 hover:bg-black/10"
+              }`}
+              title={isDark ? "Tryb jasny" : "Tryb ciemny"}
+            >
+              {isDark ? "☀️" : "🌙"}
+            </button>
+
+            {/* User badge */}
+            <div className={`flex items-center gap-2.5 px-4 py-2 rounded-xl border ${
+              isDark
+                ? "bg-white/5 border-white/10"
+                : "bg-black/5 border-black/10"
+            }`}>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-red-500 flex items-center justify-center text-xs font-bold text-white">
                 {user.firstName[0]}{user.lastName[0]}
               </div>
               <div>
-                <span style={styles.userName}>
+                <span className={`text-sm font-semibold block leading-none ${isDark ? "text-slate-200" : "text-slate-800"}`}>
                   {user.firstName} {user.lastName}
                 </span>
-                <div style={styles.rolePill}>{user.role}</div>
+                <span className="text-xs font-bold text-purple-500 uppercase tracking-widest">
+                  {user.role}
+                </span>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main content */}
-      <main style={styles.main}>
-        {activeProject ? (
-          <StoryBoard
-            projectId={activeProject.id}
-            projectName={activeProject.name}
-            onBack={goBackToProjects}
-          />
-        ) : (
-          <>
-            <div style={styles.statsRow}>
-              <div style={styles.statCard}>
-                <span style={styles.statNum}>{projects.length}</span>
-                <span style={styles.statLabel}>Projektów</span>
-              </div>
-            </div>
-
-            {projects.length === 0 ? (
-              <div style={styles.empty}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>📁</div>
-                <p style={styles.emptyTitle}>Brak projektów</p>
-                <p style={styles.emptyDesc}>Kliknij „Nowy projekt" aby rozpocząć</p>
-              </div>
-            ) : (
-              <div style={styles.grid}>
-                {projects.map((p, i) => (
-                  <div key={p.id} style={{ ...styles.card, animationDelay: `${i * 60}ms` }}>
-                    <div style={styles.cardHeader}>
-                      <div style={styles.cardDot} />
-                      <h3 style={styles.cardTitle}>{p.name}</h3>
-                    </div>
-                    <p style={styles.cardDesc}>{p.description || "Brak opisu"}</p>
-                    <div style={styles.cardId}>ID: {p.id.slice(0, 8)}…</div>
-                    <div style={styles.cardActions}>
-                      <button style={styles.selectBtn} onClick={() => selectProject(p.id)}>
-                        🚀 Wybierz
-                      </button>
-                      <button style={styles.editBtn} onClick={() => openEdit(p)}>
-                        ✏️ Edytuj
-                      </button>
-                      <button style={styles.deleteBtn} onClick={() => handleDeleteRequest(p.id)}>
-                        🗑 Usuń
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+      {/* Main */}
+      <main className="max-w-6xl mx-auto px-6 py-8 pb-16">
+        {renderMain()}
       </main>
 
-      {/* Modals */}
       {formOpen && (
         <ProjectForm project={editingProject} onSubmit={handleSubmit} onCancel={closeForm} />
       )}
       {deleteId && (
         <DeleteConfirm onConfirm={handleDeleteConfirm} onCancel={() => setDeleteId(null)} />
       )}
-
-      {/* Global keyframes */}
-      <style>{`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { margin: 0; }
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(18px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes toastIn {
-          from { opacity: 0; transform: translateY(-20px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,.4); }
-          50%      { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
-        }
-      `}</style>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    fontFamily: "'DM Sans', sans-serif",
-    background: "linear-gradient(145deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)",
-    minHeight: "100vh", color: "#e2e8f0", position: "relative",
-  },
-  toast: {
-    position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
-    background: "#22c55e", color: "#fff", padding: "10px 24px", borderRadius: 10,
-    fontWeight: 600, fontSize: 14, zIndex: 999, animation: "toastIn .3s ease",
-    boxShadow: "0 8px 30px rgba(34,197,94,.35)",
-  },
-  header: {
-    borderBottom: "1px solid rgba(255,255,255,.06)",
-    backdropFilter: "blur(12px)", background: "rgba(15,23,42,.7)",
-    position: "sticky", top: 0, zIndex: 50,
-  },
-  headerInner: {
-    maxWidth: 1100, margin: "0 auto", padding: "16px 24px",
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    flexWrap: "wrap" as const, gap: 12,
-  },
-  headerRight: { display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" as const },
-  logo: {
-    width: 42, height: 42, borderRadius: 12,
-    background: "linear-gradient(135deg, #6366f1, #a855f7)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: 20, color: "#fff",
-  },
-  title: { margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em" },
-  subtitle: {
-    margin: 0, fontSize: 12, color: "#94a3b8",
-    letterSpacing: "0.05em", textTransform: "uppercase" as const,
-  },
-  userBadge: {
-    display: "flex", alignItems: "center", gap: 10,
-    background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)",
-    borderRadius: 10, padding: "8px 14px",
-  },
-  avatar: {
-    width: 32, height: 32, borderRadius: 8,
-    background: "linear-gradient(135deg, #f59e0b, #ef4444)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 12, fontWeight: 700, color: "#fff",
-  },
-  userName: { fontSize: 14, fontWeight: 600, color: "#e2e8f0", display: "block" },
-  rolePill: {
-    fontSize: 10, fontWeight: 700, color: "#a855f7", textTransform: "uppercase" as const,
-    letterSpacing: "0.06em",
-  },
-  addBtn: {
-    background: "linear-gradient(135deg, #6366f1, #8b5cf6)", border: "none",
-    color: "#fff", padding: "10px 20px", borderRadius: 10, fontWeight: 600,
-    fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center",
-    gap: 8, boxShadow: "0 4px 20px rgba(99,102,241,.3)", fontFamily: "inherit",
-  },
-  main: { maxWidth: 1100, margin: "0 auto", padding: "32px 24px 60px" },
-  statsRow: { display: "flex", gap: 16, marginBottom: 32 },
-  statCard: {
-    background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 14, padding: "20px 28px",
-    display: "flex", flexDirection: "column" as const, gap: 4, minWidth: 140,
-  },
-  statNum: {
-    fontSize: 32, fontWeight: 700, fontFamily: "'Space Mono', monospace",
-    background: "linear-gradient(135deg, #6366f1, #a855f7)",
-    WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-  },
-  statLabel: {
-    fontSize: 13, color: "#94a3b8",
-    textTransform: "uppercase" as const, letterSpacing: "0.08em",
-  },
-  empty: { textAlign: "center" as const, padding: "80px 20px" },
-  emptyTitle: { fontSize: 20, fontWeight: 700, margin: "0 0 6px", color: "#e2e8f0" },
-  emptyDesc: { color: "#94a3b8", margin: 0, fontSize: 14 },
-  grid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20,
-  },
-  card: {
-    background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)",
-    borderRadius: 16, padding: 24, animation: "fadeSlideUp .45s ease both",
-  },
-  cardHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
-  cardDot: {
-    width: 10, height: 10, borderRadius: "50%",
-    background: "linear-gradient(135deg, #6366f1, #a855f7)",
-    flexShrink: 0, animation: "pulse 2.5s infinite",
-  },
-  cardTitle: { margin: 0, fontSize: 17, fontWeight: 700, letterSpacing: "-0.01em" },
-  cardDesc: { margin: "0 0 12px", fontSize: 14, color: "#94a3b8", lineHeight: 1.55 },
-  cardId: {
-    fontSize: 11, fontFamily: "'Space Mono', monospace",
-    color: "#475569", marginBottom: 16,
-  },
-  cardActions: { display: "flex", gap: 8, flexWrap: "wrap" as const },
-  selectBtn: {
-    background: "linear-gradient(135deg, #6366f1, #8b5cf6)", border: "none",
-    color: "#fff", padding: "7px 14px", borderRadius: 8, fontSize: 13,
-    cursor: "pointer", fontFamily: "inherit", fontWeight: 600,
-  },
-  editBtn: {
-    background: "rgba(99,102,241,.15)", border: "1px solid rgba(99,102,241,.25)",
-    color: "#a5b4fc", padding: "7px 14px", borderRadius: 8, fontSize: 13,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-  deleteBtn: {
-    background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.2)",
-    color: "#fca5a5", padding: "7px 14px", borderRadius: 8, fontSize: 13,
-    cursor: "pointer", fontFamily: "inherit",
-  },
-};

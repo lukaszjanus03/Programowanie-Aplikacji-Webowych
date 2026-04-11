@@ -1,21 +1,35 @@
+import { useTheme } from "../ThemeContext";
+
 interface DeleteConfirmProps {
   onConfirm: () => void;
   onCancel: () => void;
 }
 
 export default function DeleteConfirm({ onConfirm, onCancel }: DeleteConfirmProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   return (
-    <div style={styles.overlay} onClick={onCancel}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <h2 style={styles.title}>Potwierdź usunięcie</h2>
-        <p style={styles.desc}>
-          Czy na pewno chcesz usunąć ten projekt? Tej operacji nie można cofnąć.
+    <div className="modal-overlay" onClick={onCancel}>
+      <div
+        className={`max-w-md w-full rounded-2xl p-8 border animate-fade-slide-up ${isDark ? "bg-slate-800 border-white/10" : "bg-white border-slate-200"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-2xl font-bold text-red-500 mb-3">Potwierdź usunięcie</h2>
+        <p className={`mb-6 text-sm leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+          Czy na pewno chcesz usunąć ten element? Tej operacji nie można cofnąć.
         </p>
-        <div style={styles.actions}>
-          <button style={styles.cancelBtn} onClick={onCancel}>
+        <div className="flex justify-end gap-2.5">
+          <button
+            className={`px-5 py-2.5 rounded-xl text-sm border transition-colors ${isDark ? "border-white/10 text-slate-400 hover:bg-white/5" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+            onClick={onCancel}
+          >
             Anuluj
           </button>
-          <button style={styles.deleteBtn} onClick={onConfirm}>
+          <button
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/30 hover:opacity-90 transition-opacity"
+            onClick={onConfirm}
+          >
             Tak, usuń
           </button>
         </div>
@@ -23,65 +37,3 @@ export default function DeleteConfirm({ onConfirm, onCancel }: DeleteConfirmProp
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,.6)",
-    backdropFilter: "blur(6px)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 100,
-    padding: 20,
-  },
-  modal: {
-    background: "#1e293b",
-    border: "1px solid rgba(255,255,255,.1)",
-    borderRadius: 18,
-    padding: 32,
-    width: "100%",
-    maxWidth: 420,
-    animation: "fadeSlideUp .3s ease",
-  },
-  title: {
-    margin: "0 0 12px",
-    fontSize: 22,
-    fontWeight: 700,
-    color: "#ef4444",
-  },
-  desc: {
-    color: "#94a3b8",
-    margin: "0 0 24px",
-    fontSize: 15,
-    lineHeight: 1.5,
-  },
-  actions: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 10,
-  },
-  cancelBtn: {
-    background: "transparent",
-    border: "1px solid rgba(255,255,255,.12)",
-    color: "#94a3b8",
-    padding: "10px 20px",
-    borderRadius: 10,
-    fontSize: 14,
-    cursor: "pointer",
-    fontFamily: "inherit",
-  },
-  deleteBtn: {
-    background: "linear-gradient(135deg, #ef4444, #dc2626)",
-    border: "none",
-    color: "#fff",
-    padding: "10px 20px",
-    borderRadius: 10,
-    fontWeight: 600,
-    fontSize: 14,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    boxShadow: "0 4px 20px rgba(239,68,68,.3)",
-  },
-};
