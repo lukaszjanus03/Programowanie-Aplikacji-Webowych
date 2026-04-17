@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Story, StoryStatus, Priority } from "../models/Story";
 import { storyApi } from "../api/storyApi";
-import { userManager } from "../api/userManager";
 import { useTheme } from "../ThemeContext";
+import { useAuth } from "../auth/AuthContext";
 import StoryForm from "./StoryForm";
 import DeleteConfirm from "./DeleteConfirm";
 import KanbanBoard from "./KanbanBoard";
@@ -36,6 +36,8 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
+  const { currentUser } = useAuth();
+
   const reload = useCallback(() => { setStories(storyApi.getByProject(projectId)); }, [projectId]);
   useEffect(() => { reload(); }, [reload]);
   useEffect(() => {
@@ -49,7 +51,8 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
   const closeForm = () => { setFormOpen(false); setEditingStory(null); };
 
   const handleSubmit = (data: { name: string; description: string; priority: Priority; status: StoryStatus }) => {
-    const user = userManager.getLoggedUser();
+    if (!currentUser) return;
+    const user = currentUser;
     if (editingStory) {
       storyApi.update(editingStory.id, data);
       setToast("Historyjka zaktualizowana ✓");

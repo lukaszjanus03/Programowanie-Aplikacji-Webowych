@@ -1,16 +1,37 @@
-const ACTIVE_KEY = "manageme_active_project";
+import { store } from "../storage";
 
+/**
+ * Pamięta aktywny projekt w ustawieniach store'a. W trybie localStorage
+ * leży to w localStorage (jak dotąd), w trybie firestore — w kolekcji
+ * `settings` z kluczem `active_project`.
+ *
+ * Interfejs synchroniczny zachowany dla wygody komponentów — wartość
+ * cache'owana jest w pamięci procesu po pierwszym odczycie.
+ */
 class ActiveProjectApi {
-  get(): string | null {
-    return localStorage.getItem(ACTIVE_KEY);
+  private readonly KEY = "active_project";
+  private cache: string | null = null;
+  private loaded = false;
+
+  async bootstrap(): Promise<void> {
+    this.cache = await store.getSetting(this.KEY);
+    this.loaded = true;
   }
 
-  set(projectId: string): void {
-    localStorage.setItem(ACTIVE_KEY, projectId);
+  get(): string | null {
+    return this.loaded ? this.cache : null;
+  }
+
+  set(id: string): void {
+    this.cache = id;
+    this.loaded = true;
+    void store.setSetting(this.KEY, id);
   }
 
   clear(): void {
-    localStorage.removeItem(ACTIVE_KEY);
+    this.cache = null;
+    this.loaded = true;
+    void store.setSetting(this.KEY, null);
   }
 }
 

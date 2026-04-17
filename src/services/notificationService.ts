@@ -1,5 +1,5 @@
 import { notificationApi } from "../api/notificationApi";
-import { userManager, MOCK_USERS } from "../api/userManager";
+import { userManager } from "../api/userManager";
 import { Notification } from "../models/Notification";
 
 type NotificationCallback = (notification: Notification) => void;
@@ -20,11 +20,25 @@ class NotificationService {
 
   /** Utworzono nowy projekt (high, otrzymuje każdy admin) */
   notifyProjectCreated(projectName: string): void {
-    const admins = MOCK_USERS.filter((u) => u.role === "admin");
+    const admins = userManager.getAdmins();
     admins.forEach((admin) => {
       const n = notificationApi.send({
         title: "Nowy projekt utworzony",
         message: `Utworzono nowy projekt: „${projectName}".`,
+        prority: "high",
+        recipientId: admin.id,
+      });
+      this.emit(n);
+    });
+  }
+
+  /** Nowy użytkownik w systemie (high, otrzymuje każdy admin) */
+  notifyUserRegistered(userFullName: string, userEmail: string): void {
+    const admins = userManager.getAdmins();
+    admins.forEach((admin) => {
+      const n = notificationApi.send({
+        title: "Nowe konto w systemie",
+        message: `Utworzono nowe konto użytkownika: ${userFullName} (${userEmail}).`,
         prority: "high",
         recipientId: admin.id,
       });

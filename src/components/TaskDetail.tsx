@@ -30,6 +30,7 @@ const ROLE_MAP = {
   admin:     { label: "Admin",     color: "text-purple-400", border: "border-purple-400" },
   developer: { label: "Developer", color: "text-blue-400",   border: "border-blue-400"  },
   devops:    { label: "DevOps",    color: "text-amber-400",  border: "border-amber-400" },
+  guest:     { label: "Gość",      color: "text-slate-400",  border: "border-slate-400" },
 };
 
 export default function TaskDetail({ taskId, onBack, onUpdated }: TaskDetailProps) {

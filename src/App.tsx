@@ -4,9 +4,9 @@ import { Notification } from "./models/Notification";
 import { projectApi } from "./api/projectApi";
 import { activeProjectApi } from "./api/activeProjectApi";
 import { notificationApi } from "./api/notificationApi";
-import { userManager } from "./api/userManager";
 import { notificationService } from "./services/notificationService";
 import { useTheme } from "./ThemeContext";
+import { useAuth } from "./auth/AuthContext";
 import ProjectForm from "./components/ProjectForm";
 import DeleteConfirm from "./components/DeleteConfirm";
 import StoryBoard from "./components/StoryBoard";
@@ -14,14 +14,24 @@ import NotificationBadge from "./components/NotificationBadge";
 import NotificationList from "./components/NotificationList";
 import NotificationDetail from "./components/NotificationDetail";
 import NotificationDialog from "./components/NotificationDialog";
+import LoginView from "./components/LoginView";
+import PendingApprovalView from "./components/PendingApprovalView";
+import BlockedView from "./components/BlockedView";
+import UsersView from "./components/UsersView";
+import StorageToggle from "./components/StorageToggle";
 
 type View =
   | { kind: "projects" }
   | { kind: "stories" }
   | { kind: "notifications" }
-  | { kind: "notificationDetail"; id: string };
+  | { kind: "notificationDetail"; id: string }
+  | { kind: "users" };
 
 export default function App() {
+  const { currentUser, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -32,16 +42,16 @@ export default function App() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [dialogNotification, setDialogNotification] = useState<Notification | null>(null);
 
-  const { theme, toggleTheme } = useTheme();
-  const user = userManager.getLoggedUser();
   const reload = useCallback(() => setProjects(projectApi.getAll()), []);
-  const isDark = theme === "dark";
 
   const refreshNotifications = useCallback(() => {
-    setUnreadCount(notificationApi.getUnreadCount(user.id));
-  }, [user.id]);
+    if (!currentUser) return;
+    setUnreadCount(notificationApi.getUnreadCount(currentUser.id));
+  }, [currentUser]);
 
+  // Initial data load (only when we actually have a logged-in active user)
   useEffect(() => {
+    if (!currentUser || currentUser.isBlocked || currentUser.role === "guest") return;
     reload();
     refreshNotifications();
     const saved = activeProjectApi.get();
@@ -49,28 +59,36 @@ export default function App() {
       setActiveProjectId(saved);
       setView({ kind: "stories" });
     }
-  }, [reload, refreshNotifications]);
+  }, [currentUser, reload, refreshNotifications]);
 
   // Subscribe to real-time notification events
   useEffect(() => {
+    if (!currentUser || currentUser.isBlocked || currentUser.role === "guest") return;
     const unsub = notificationService.subscribe((notification) => {
       refreshNotifications();
-      // Show dialog for medium and high priority notifications for the current user
       if (
-        notification.recipientId === user.id &&
+        notification.recipientId === currentUser.id &&
         (notification.prority === "medium" || notification.prority === "high")
       ) {
         setDialogNotification(notification);
       }
     });
     return unsub;
-  }, [refreshNotifications, user.id]);
+  }, [refreshNotifications, currentUser]);
 
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2400);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // --- auth-based routing (short-circuits normal rendering) ---
+  if (!currentUser) return <LoginView />;
+  if (currentUser.isBlocked) return <BlockedView />;
+  if (currentUser.role === "guest") return <PendingApprovalView />;
+
+  const user = currentUser;
+  const isAdmin = user.role === "admin";
 
   const openCreate = () => { setEditingProject(null); setFormOpen(true); };
   const openEdit = (project: Project) => { setEditingProject(project); setFormOpen(true); };
@@ -136,9 +154,36 @@ export default function App() {
     setView({ kind: "projects" });
   };
 
+  const openUsers = () => {
+    setView({ kind: "users" });
+    setActiveProjectId(null);
+    activeProjectApi.clear();
+  };
+
+  const backFromUsers = () => {
+    setView({ kind: "projects" });
+  };
+
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   const renderMain = () => {
+    if (view.kind === "users") {
+      if (!isAdmin) {
+        return (
+          <div className="text-center py-20">
+            <div className="text-5xl mb-4">🔒</div>
+            <p className={`text-xl font-bold mb-2 ${isDark ? "text-slate-200" : "text-slate-800"}`}>
+              Brak dostępu
+            </p>
+            <p className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+              Listę użytkowników mogą przeglądać tylko administratorzy.
+            </p>
+          </div>
+        );
+      }
+      return <UsersView onBack={backFromUsers} />;
+    }
+
     if (view.kind === "notificationDetail") {
       const n = notificationApi.getById(view.id);
       if (!n) return <p className={`text-sm ${isDark ? "text-slate-500" : "text-slate-400"}`}>Nie znaleziono powiadomienia.</p>;
@@ -310,6 +355,24 @@ export default function App() {
               </button>
             )}
 
+            {/* Users management (admin only) */}
+            {isAdmin && (
+              <button
+                className={`px-4 py-2 rounded-xl text-sm border transition-colors ${
+                  view.kind === "users"
+                    ? isDark
+                      ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-300"
+                      : "bg-indigo-50 border-indigo-200 text-indigo-600"
+                    : isDark
+                      ? "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                      : "bg-black/5 border-black/10 text-slate-500 hover:bg-black/10"
+                }`}
+                onClick={openUsers}
+              >
+                👥 Użytkownicy
+              </button>
+            )}
+
             {/* Notifications link in menu */}
             <button
               className={`px-4 py-2 rounded-xl text-sm border transition-colors ${
@@ -328,6 +391,9 @@ export default function App() {
 
             {/* Notification bell badge */}
             <NotificationBadge count={unreadCount} onClick={openNotifications} />
+
+            {/* Storage backend toggle (Lab 7) */}
+            <StorageToggle />
 
             {/* Dark mode toggle */}
             <button
@@ -348,8 +414,12 @@ export default function App() {
                 ? "bg-white/5 border-white/10"
                 : "bg-black/5 border-black/10"
             }`}>
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-red-500 flex items-center justify-center text-xs font-bold text-white">
-                {user.firstName[0]}{user.lastName[0]}
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-red-500 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
+                {user.picture ? (
+                  <img src={user.picture} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <>{user.firstName[0]}{user.lastName[0]}</>
+                )}
               </div>
               <div>
                 <span className={`text-sm font-semibold block leading-none ${isDark ? "text-slate-200" : "text-slate-800"}`}>
@@ -360,6 +430,19 @@ export default function App() {
                 </span>
               </div>
             </div>
+
+            {/* Logout */}
+            <button
+              onClick={logout}
+              title="Wyloguj"
+              className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-colors ${
+                isDark
+                  ? "bg-white/5 border border-white/10 hover:bg-red-500/15 hover:border-red-500/30 hover:text-red-300"
+                  : "bg-black/5 border border-black/10 hover:bg-red-50 hover:border-red-200 hover:text-red-500"
+              }`}
+            >
+              ⏻
+            </button>
           </div>
         </div>
       </header>

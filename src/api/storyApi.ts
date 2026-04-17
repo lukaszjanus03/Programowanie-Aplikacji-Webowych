@@ -1,15 +1,9 @@
 import { Story, StoryCreateDTO, StoryUpdateDTO } from "../models/Story";
-
-const STORAGE_KEY = "manageme_stories";
+import { store } from "../storage";
 
 class StoryApi {
   getAll(): Story[] {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as Story[]) : [];
-    } catch {
-      return [];
-    }
+    return store.getAll<Story>("stories");
   }
 
   getByProject(projectId: string): Story[] {
@@ -20,12 +14,7 @@ class StoryApi {
     return this.getAll().find((s) => s.id === id);
   }
 
-  private save(stories: Story[]): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stories));
-  }
-
-  create(data: StoryCreateDTO): Story {
-    const stories = this.getAll();
+  async create(data: StoryCreateDTO): Promise<Story> {
     const newStory: Story = {
       id: crypto.randomUUID(),
       name: data.name,
@@ -36,23 +25,20 @@ class StoryApi {
       status: data.status,
       ownerId: data.ownerId,
     };
-    stories.push(newStory);
-    this.save(stories);
+    await store.upsert("stories", newStory);
     return newStory;
   }
 
-  update(id: string, data: StoryUpdateDTO): Story | null {
-    const stories = this.getAll();
-    const idx = stories.findIndex((s) => s.id === id);
-    if (idx === -1) return null;
-    stories[idx] = { ...stories[idx], ...data };
-    this.save(stories);
-    return stories[idx];
+  async update(id: string, data: StoryUpdateDTO): Promise<Story | null> {
+    const existing = this.getById(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...data };
+    await store.upsert("stories", updated);
+    return updated;
   }
 
-  delete(id: string): void {
-    const stories = this.getAll().filter((s) => s.id !== id);
-    this.save(stories);
+  async delete(id: string): Promise<void> {
+    await store.remove("stories", id);
   }
 }
 

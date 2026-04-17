@@ -1,15 +1,9 @@
 import { Task, TaskCreateDTO, TaskUpdateDTO } from "../models/Task";
-
-const STORAGE_KEY = "manageme_tasks";
+import { store } from "../storage";
 
 class TaskApi {
   getAll(): Task[] {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as Task[]) : [];
-    } catch {
-      return [];
-    }
+    return store.getAll<Task>("tasks");
   }
 
   getByStory(storyId: string): Task[] {
@@ -20,12 +14,7 @@ class TaskApi {
     return this.getAll().find((t) => t.id === id);
   }
 
-  private save(tasks: Task[]): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-  }
-
-  create(data: TaskCreateDTO): Task {
-    const tasks = this.getAll();
+  async create(data: TaskCreateDTO): Promise<Task> {
     const newTask: Task = {
       id: crypto.randomUUID(),
       name: data.name,
@@ -36,50 +25,45 @@ class TaskApi {
       status: "todo",
       createdAt: new Date().toISOString(),
     };
-    tasks.push(newTask);
-    this.save(tasks);
+    await store.upsert("tasks", newTask);
     return newTask;
   }
 
-  update(id: string, data: TaskUpdateDTO): Task | null {
-    const tasks = this.getAll();
-    const idx = tasks.findIndex((t) => t.id === id);
-    if (idx === -1) return null;
-    tasks[idx] = { ...tasks[idx], ...data };
-    this.save(tasks);
-    return tasks[idx];
+  async update(id: string, data: TaskUpdateDTO): Promise<Task | null> {
+    const existing = this.getById(id);
+    if (!existing) return null;
+    const updated: Task = { ...existing, ...data };
+    await store.upsert("tasks", updated);
+    return updated;
   }
 
-  assignUser(id: string, userId: string): Task | null {
-    const tasks = this.getAll();
-    const idx = tasks.findIndex((t) => t.id === id);
-    if (idx === -1) return null;
-    tasks[idx] = {
-      ...tasks[idx],
+  async assignUser(id: string, userId: string): Promise<Task | null> {
+    const existing = this.getById(id);
+    if (!existing) return null;
+    const updated: Task = {
+      ...existing,
       assignedUserId: userId,
       status: "doing",
       startedAt: new Date().toISOString(),
     };
-    this.save(tasks);
-    return tasks[idx];
+    await store.upsert("tasks", updated);
+    return updated;
   }
 
-  markDone(id: string): Task | null {
-    const tasks = this.getAll();
-    const idx = tasks.findIndex((t) => t.id === id);
-    if (idx === -1) return null;
-    tasks[idx] = {
-      ...tasks[idx],
+  async markDone(id: string): Promise<Task | null> {
+    const existing = this.getById(id);
+    if (!existing) return null;
+    const updated: Task = {
+      ...existing,
       status: "done",
       finishedAt: new Date().toISOString(),
     };
-    this.save(tasks);
-    return tasks[idx];
+    await store.upsert("tasks", updated);
+    return updated;
   }
 
-  delete(id: string): void {
-    const tasks = this.getAll().filter((t) => t.id !== id);
-    this.save(tasks);
+  async delete(id: string): Promise<void> {
+    await store.remove("tasks", id);
   }
 }
 

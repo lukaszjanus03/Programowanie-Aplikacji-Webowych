@@ -1,53 +1,81 @@
-import { User } from "../models/User";
+import { User, UserRole } from "../models/User";
+import { store } from "../storage";
 
-export const MOCK_USERS: User[] = [
-  {
-    id: "user-001",
-    firstName: "Łukasz",
-    lastName: "Janus",
-    role: "admin",
-  },
-  {
-    id: "user-002",
-    firstName: "Anna",
-    lastName: "Kowalska",
-    role: "developer",
-  },
-  {
-    id: "user-003",
-    firstName: "Piotr",
-    lastName: "Nowak",
-    role: "devops",
-  },
-  {
-    id: "user-004",
-    firstName: "Maria",
-    lastName: "Wiśniewska",
-    role: "developer",
-  },
-];
+const CURRENT_USER_KEY = "current_user_id";
 
 class UserManager {
-  private currentUser: User = MOCK_USERS[0];
-
-  getLoggedUser(): User {
-    return this.currentUser;
+  getAll(): User[] {
+    return store.getAll<User>("users");
   }
 
-  getFullName(): string {
-    return `${this.currentUser.firstName} ${this.currentUser.lastName}`;
+  getById(id: string): User | undefined {
+    return this.getAll().find((u) => u.id === id);
   }
 
-  getAllUsers(): User[] {
-    return MOCK_USERS;
-  }
-
-  getAssignableUsers(): User[] {
-    return MOCK_USERS.filter((u) => u.role === "developer" || u.role === "devops");
-  }
-
+  /** Alias zachowany dla kompatybilności z istniejącymi komponentami. */
   getUserById(id: string): User | undefined {
-    return MOCK_USERS.find((u) => u.id === id);
+    return this.getById(id);
+  }
+
+  getByEmail(email: string): User | undefined {
+    const needle = email.toLowerCase();
+    return this.getAll().find((u) => u.email.toLowerCase() === needle);
+  }
+
+  async create(data: Omit<User, "id">): Promise<User> {
+    const newUser: User = { ...data, id: crypto.randomUUID() };
+    await store.upsert("users", newUser);
+    return newUser;
+  }
+
+  async updateRole(id: string, role: UserRole): Promise<User | undefined> {
+    const existing = this.getById(id);
+    if (!existing) return undefined;
+    const updated: User = { ...existing, role };
+    await store.upsert("users", updated);
+    return updated;
+  }
+
+  async setBlocked(id: string, isBlocked: boolean): Promise<User | undefined> {
+    const existing = this.getById(id);
+    if (!existing) return undefined;
+    const updated: User = { ...existing, isBlocked };
+    await store.upsert("users", updated);
+    return updated;
+  }
+
+  /** Użytkownicy, których można przypisać do zadań (developer + devops, odblokowani). */
+  getAssignableUsers(): User[] {
+    return this.getAll().filter(
+      (u) => !u.isBlocked && (u.role === "developer" || u.role === "devops")
+    );
+  }
+
+  getAdmins(): User[] {
+    return this.getAll().filter((u) => !u.isBlocked && u.role === "admin");
+  }
+
+  getFullName(user: User): string {
+    return `${user.firstName} ${user.lastName}`;
+  }
+
+  // --- zapamiętywanie aktualnie zalogowanego użytkownika ---
+  private currentUserIdCache: string | null = null;
+  private currentUserLoaded = false;
+
+  async bootstrapCurrentUser(): Promise<void> {
+    this.currentUserIdCache = await store.getSetting(CURRENT_USER_KEY);
+    this.currentUserLoaded = true;
+  }
+
+  getCurrentUserId(): string | null {
+    return this.currentUserLoaded ? this.currentUserIdCache : null;
+  }
+
+  setCurrentUserId(id: string | null): void {
+    this.currentUserIdCache = id;
+    this.currentUserLoaded = true;
+    void store.setSetting(CURRENT_USER_KEY, id);
   }
 }
 

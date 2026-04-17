@@ -1,15 +1,9 @@
 import { Notification } from "../models/Notification";
-
-const STORAGE_KEY = "manageme_notifications";
+import { store } from "../storage";
 
 class NotificationApi {
   getAll(): Notification[] {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? (JSON.parse(raw) as Notification[]) : [];
-    } catch {
-      return [];
-    }
+    return store.getAll<Notification>("notifications");
   }
 
   getByRecipient(recipientId: string): Notification[] {
@@ -26,12 +20,8 @@ class NotificationApi {
     return this.getByRecipient(recipientId).filter((n) => !n.isRead).length;
   }
 
-  private save(notifications: Notification[]): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
-  }
-
+  /** Funkcja synchroniczna dla wygody UI — fire-and-forget zapis do store. */
   send(data: Omit<Notification, "id" | "date" | "isRead">): Notification {
-    const notifications = this.getAll();
     const newNotification: Notification = {
       id: crypto.randomUUID(),
       title: data.title,
@@ -41,31 +31,26 @@ class NotificationApi {
       isRead: false,
       recipientId: data.recipientId,
     };
-    notifications.push(newNotification);
-    this.save(notifications);
+    // zapisujemy optymistycznie — store.upsert aktualizuje cache natychmiast
+    void store.upsert("notifications", newNotification);
     return newNotification;
   }
 
-  markAsRead(id: string): void {
-    const notifications = this.getAll();
-    const idx = notifications.findIndex((n) => n.id === id);
-    if (idx !== -1) {
-      notifications[idx] = { ...notifications[idx], isRead: true };
-      this.save(notifications);
-    }
+  async markAsRead(id: string): Promise<void> {
+    const existing = this.getById(id);
+    if (!existing) return;
+    await store.upsert("notifications", { ...existing, isRead: true });
   }
 
-  markAllAsRead(recipientId: string): void {
-    const notifications = this.getAll();
-    const updated = notifications.map((n) =>
-      n.recipientId === recipientId ? { ...n, isRead: true } : n
+  async markAllAsRead(recipientId: string): Promise<void> {
+    const toUpdate = this.getAll().filter((n) => n.recipientId === recipientId && !n.isRead);
+    await Promise.all(
+      toUpdate.map((n) => store.upsert("notifications", { ...n, isRead: true }))
     );
-    this.save(updated);
   }
 
-  delete(id: string): void {
-    const notifications = this.getAll().filter((n) => n.id !== id);
-    this.save(notifications);
+  async delete(id: string): Promise<void> {
+    await store.remove("notifications", id);
   }
 }
 
