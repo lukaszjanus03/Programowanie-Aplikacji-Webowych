@@ -106,7 +106,7 @@ export default function StoryBoard({ projectId, projectName, onBack }: StoryBoar
             {stories.length} historyjek
           </span>
         </div>
-        <button className="btn-primary" onClick={openCreate}>
+        <button data-testid="story-create-btn" className="btn-primary" onClick={openCreate}>
           <span className="text-lg leading-none">+</span> Nowa historyjka
         </button>
       </div>
@@ -183,7 +183,7 @@ function StoryCard({ story, onEdit, onDelete, onKanban, isDark, cardBase }: {
 }) {
   const prio = PRIORITY_LABELS[story.priority];
   return (
-    <div className={`rounded-xl border p-4 mb-2.5 animate-fade-slide-up transition-colors ${cardBase}`}>
+    <div className={`rounded-xl border p-4 mb-2.5 animate-fade-slide-up transition-colors ${cardBase}`} data-testid="story-card" data-story-name={story.name}>
       <div className="flex items-center justify-between mb-2">
         <span className={`text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${prio.color} ${prio.border}`}>
           {prio.label}
@@ -192,24 +192,27 @@ function StoryCard({ story, onEdit, onDelete, onKanban, isDark, cardBase }: {
           {new Date(story.createdAt).toLocaleDateString("pl-PL")}
         </span>
       </div>
-      <h4 className={`text-sm font-bold mb-1.5 ${isDark ? "text-slate-100" : "text-slate-900"}`}>{story.name}</h4>
+      <h4 data-testid="story-card-name" className={`text-sm font-bold mb-1.5 ${isDark ? "text-slate-100" : "text-slate-900"}`}>{story.name}</h4>
       {story.description && (
         <p className={`text-xs leading-relaxed mb-3 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{story.description}</p>
       )}
       <div className="flex gap-1.5">
         <button
+          data-testid="story-kanban-btn"
           className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${isDark ? "bg-blue-500/10 border-blue-500/25 text-blue-300 hover:bg-blue-500/20" : "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"}`}
           onClick={() => onKanban(story.id)}
         >
           📌 Kanban
         </button>
         <button
+          data-testid="story-edit-btn"
           className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${isDark ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20" : "bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100"}`}
           onClick={() => onEdit(story)}
         >
           ✏️
         </button>
         <button
+          data-testid="story-delete-btn"
           className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${isDark ? "bg-red-500/10 border-red-500/15 text-red-300 hover:bg-red-500/15" : "bg-red-50 border-red-200 text-red-500 hover:bg-red-100"}`}
           onClick={() => onDelete(story.id)}
         >

@@ -114,6 +114,7 @@ export default function TaskDetail({ taskId, onBack, onUpdated }: TaskDetailProp
       {/* Top bar */}
       <div className="flex items-center gap-4 mb-7">
         <button
+          data-testid="task-detail-back"
           className={`px-4 py-2 rounded-lg text-sm border transition-colors ${isDark ? "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-sm"}`}
           onClick={onBack}
         >
@@ -181,7 +182,7 @@ export default function TaskDetail({ taskId, onBack, onUpdated }: TaskDetailProp
             {task.status === "todo" && (
               <div className={`border-t pt-4 ${isDark ? "border-white/[0.07]" : "border-slate-100"}`}>
                 <label className={`form-label ${isDark ? "text-slate-400" : "text-slate-500"}`}>Przypisz osobę</label>
-                <select className={`${inputCls} mb-3`} value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}>
+                <select data-testid="task-assign-select" className={`${inputCls} mb-3`} value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}>
                   <option value="">— wybierz —</option>
                   {assignableUsers.map((u) => (
                     <option key={u.id} value={u.id}>
@@ -190,6 +191,7 @@ export default function TaskDetail({ taskId, onBack, onUpdated }: TaskDetailProp
                   ))}
                 </select>
                 <button
+                  data-testid="task-assign-submit"
                   className={`w-full btn-primary justify-center ${!selectedUserId ? "opacity-45 cursor-not-allowed" : ""}`}
                   onClick={handleAssign}
                   disabled={!selectedUserId}
@@ -207,6 +209,7 @@ export default function TaskDetail({ taskId, onBack, onUpdated }: TaskDetailProp
                 Kliknięcie zakończy zadanie i uzupełni datę zakończenia.
               </p>
               <button
+                data-testid="task-markdone-btn"
                 className="w-full px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-500/30 hover:opacity-90 transition-opacity cursor-pointer"
                 onClick={handleMarkDone}
               >

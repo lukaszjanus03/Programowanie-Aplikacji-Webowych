@@ -19,7 +19,7 @@ export default function NotificationDialog({ notification, onClose, onViewDetail
   const prio = PRIO_STYLES[notification.prority];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} data-testid="notification-dialog">
       <div
         className={`max-w-md w-full rounded-2xl p-8 border animate-fade-slide-up ${
           isDark ? "bg-slate-800 border-white/10" : "bg-white border-slate-200"
@@ -43,6 +43,7 @@ export default function NotificationDialog({ notification, onClose, onViewDetail
 
         <div className="flex justify-end gap-2.5">
           <button
+            data-testid="notification-dialog-close"
             className={`px-5 py-2.5 rounded-xl text-sm border transition-colors ${
               isDark
                 ? "border-white/10 text-slate-400 hover:bg-white/5"
@@ -53,6 +54,7 @@ export default function NotificationDialog({ notification, onClose, onViewDetail
             Zamknij
           </button>
           <button
+            data-testid="notification-dialog-view"
             className="btn-primary"
             onClick={() => onViewDetail(notification.id)}
           >

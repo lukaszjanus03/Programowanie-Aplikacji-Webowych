@@ -251,6 +251,8 @@ export default function App() {
             {projects.map((p, i) => (
               <div
                 key={p.id}
+                data-testid="project-card"
+                data-project-name={p.name}
                 className={`rounded-2xl p-6 border animate-fade-slide-up transition-colors ${
                   isDark
                     ? "bg-white/5 border-white/10 hover:bg-white/[0.08]"
@@ -260,21 +262,22 @@ export default function App() {
               >
                 <div className="flex items-center gap-2.5 mb-3">
                   <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 shrink-0 animate-pulse-glow" />
-                  <h3 className={`text-base font-bold tracking-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}>
+                  <h3 data-testid="project-card-name" className={`text-base font-bold tracking-tight ${isDark ? "text-slate-100" : "text-slate-900"}`}>
                     {p.name}
                   </h3>
                 </div>
-                <p className={`text-sm mb-3 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                <p data-testid="project-card-description" className={`text-sm mb-3 leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   {p.description || "Brak opisu"}
                 </p>
                 <div className={`text-xs font-mono mb-5 ${isDark ? "text-slate-600" : "text-slate-400"}`}>
                   ID: {p.id.slice(0, 8)}…
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <button className="btn-primary text-xs px-3.5 py-1.5" onClick={() => selectProject(p.id)}>
+                  <button data-testid="project-select-btn" className="btn-primary text-xs px-3.5 py-1.5" onClick={() => selectProject(p.id)}>
                     🚀 Wybierz
                   </button>
                   <button
+                    data-testid="project-edit-btn"
                     className={`px-3.5 py-1.5 rounded-lg text-xs border transition-colors ${
                       isDark
                         ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-300 hover:bg-indigo-500/20"
@@ -285,6 +288,7 @@ export default function App() {
                     ✏️ Edytuj
                   </button>
                   <button
+                    data-testid="project-delete-btn"
                     className={`px-3.5 py-1.5 rounded-lg text-xs border transition-colors ${
                       isDark
                         ? "bg-red-500/10 border-red-500/20 text-red-300 hover:bg-red-500/15"
@@ -349,7 +353,7 @@ export default function App() {
           {/* Right side */}
           <div className="flex items-center gap-3 flex-wrap">
             {view.kind === "projects" && (
-              <button className="btn-primary" onClick={openCreate}>
+              <button data-testid="project-create-btn" className="btn-primary" onClick={openCreate}>
                 <span className="text-lg leading-none">+</span>
                 <span>Nowy projekt</span>
               </button>

@@ -10,7 +10,7 @@ export default function DeleteConfirm({ onConfirm, onCancel }: DeleteConfirmProp
   const isDark = theme === "dark";
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay" onClick={onCancel} data-testid="delete-confirm">
       <div
         className={`max-w-md w-full rounded-2xl p-8 border animate-fade-slide-up ${isDark ? "bg-slate-800 border-white/10" : "bg-white border-slate-200"}`}
         onClick={(e) => e.stopPropagation()}
@@ -21,12 +21,14 @@ export default function DeleteConfirm({ onConfirm, onCancel }: DeleteConfirmProp
         </p>
         <div className="flex justify-end gap-2.5">
           <button
+            data-testid="delete-cancel"
             className={`px-5 py-2.5 rounded-xl text-sm border transition-colors ${isDark ? "border-white/10 text-slate-400 hover:bg-white/5" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
             onClick={onCancel}
           >
             Anuluj
           </button>
           <button
+            data-testid="delete-confirm-btn"
             className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/30 hover:opacity-90 transition-opacity"
             onClick={onConfirm}
           >

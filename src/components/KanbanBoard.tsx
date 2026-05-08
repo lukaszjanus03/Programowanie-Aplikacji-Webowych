@@ -122,7 +122,7 @@ export default function KanbanBoard({ storyId, onBack }: KanbanBoardProps) {
             {tasks.length} zadań
           </span>
         </div>
-        <button className="btn-primary" onClick={openCreate}>
+        <button data-testid="task-create-btn" className="btn-primary" onClick={openCreate}>
           <span className="text-lg leading-none">+</span> Nowe zadanie
         </button>
       </div>
@@ -170,7 +170,7 @@ function TaskCard({ task, onEdit, onDelete, onDetail, isDark }: {
   const fmt = (iso?: string) => iso ? new Date(iso).toLocaleDateString("pl-PL") : null;
 
   return (
-    <div className={`rounded-xl border p-3.5 mb-2.5 animate-fade-slide-up transition-colors ${isDark ? "bg-white/5 border-white/10 hover:bg-white/[0.08]" : "bg-white border-slate-200 shadow-sm hover:shadow"}`}>
+    <div className={`rounded-xl border p-3.5 mb-2.5 animate-fade-slide-up transition-colors ${isDark ? "bg-white/5 border-white/10 hover:bg-white/[0.08]" : "bg-white border-slate-200 shadow-sm hover:shadow"}`} data-testid="task-card" data-task-name={task.name} data-task-status={task.status}>
       <div className="flex items-center justify-between mb-2">
         <span className={`text-xs font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${prio.color} ${prio.border}`}>
           {prio.label}
@@ -178,7 +178,7 @@ function TaskCard({ task, onEdit, onDelete, onDetail, isDark }: {
         <span className={`text-xs font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>{task.estimatedHours}h</span>
       </div>
 
-      <h4 className={`text-sm font-bold mb-1 ${isDark ? "text-slate-100" : "text-slate-900"}`}>{task.name}</h4>
+      <h4 data-testid="task-card-name" className={`text-sm font-bold mb-1 ${isDark ? "text-slate-100" : "text-slate-900"}`}>{task.name}</h4>
       {task.description && (
         <p className={`text-xs leading-relaxed mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{task.description}</p>
       )}
@@ -197,6 +197,7 @@ function TaskCard({ task, onEdit, onDelete, onDetail, isDark }: {
 
       <div className="flex gap-1.5 mt-2.5 flex-wrap">
         <button
+          data-testid="task-detail-btn"
           className={`px-2.5 py-1 rounded text-xs border transition-colors ${isDark ? "bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20" : "bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100"}`}
           onClick={() => onDetail(task.id)}
         >
@@ -204,6 +205,7 @@ function TaskCard({ task, onEdit, onDelete, onDetail, isDark }: {
         </button>
         {task.status === "todo" && (
           <button
+            data-testid="task-edit-btn"
             className={`px-2.5 py-1 rounded text-xs border transition-colors ${isDark ? "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10" : "bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100"}`}
             onClick={() => onEdit(task)}
           >
@@ -211,6 +213,7 @@ function TaskCard({ task, onEdit, onDelete, onDetail, isDark }: {
           </button>
         )}
         <button
+          data-testid="task-delete-btn"
           className={`px-2.5 py-1 rounded text-xs border transition-colors ${isDark ? "bg-red-500/10 border-red-500/15 text-red-300 hover:bg-red-500/15" : "bg-red-50 border-red-200 text-red-500 hover:bg-red-100"}`}
           onClick={() => onDelete(task.id)}
         >

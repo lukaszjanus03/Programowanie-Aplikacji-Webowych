@@ -135,6 +135,7 @@ export default function LoginView() {
                 E-mail
               </label>
               <input
+                data-testid="login-email"
                 type="email"
                 value={devEmail}
                 onChange={(e) => setDevEmail(e.target.value)}
@@ -152,6 +153,7 @@ export default function LoginView() {
                 Imię i nazwisko (opcjonalnie)
               </label>
               <input
+                data-testid="login-name"
                 type="text"
                 value={devName}
                 onChange={(e) => setDevName(e.target.value)}
@@ -164,7 +166,7 @@ export default function LoginView() {
               />
             </div>
 
-            <button className="btn-primary w-full justify-center" onClick={handleDevLogin}>
+            <button data-testid="login-submit" className="btn-primary w-full justify-center" onClick={handleDevLogin}>
               🔐 Zaloguj się (dev mode)
             </button>
           </div>
